@@ -44,3 +44,7 @@ class LeaseLost(Conflict):
 
 class InvalidTransition(Conflict):
     code = 'invalid_transition'
+
+
+class FeedUnavailable(RegistryError):
+    code = 'feed_unavailable'

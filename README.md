@@ -22,4 +22,14 @@ GET /changes?cursor=start、p2、expired、loop。next 为不透明游标；410 
 
     python3 -m synthetic_exchange.server --port 8765
 
+poll 入口从持久化 checkpoint 续采，管理员可用 --source 限定来源、--issuer 限定签发方、--pages 限定页数。游标只定位网络页，各签发方连续生效的 sequence 由账本接收与 drain 机制独立核对，日报继续以 sequence 为准。坏行连同原页游标与原文写入 dead_letters 供 deadletter.replay 重放，不卡住同页其他签发方；整页在一个事务内核清后才确认下一游标。429 按 Retry-After 有界重试，游标重复时停采等待处理，410 按服务给定起点重放且不清空登记。同源并发采集以租约代际 fencing，旧进程的迟到提交不能覆盖新持有者的 checkpoint。
+
+    python3 -m registry_bridge --db feed.db init
+    python3 -m registry_bridge --db feed.db call issuer.add --json '{"issuer":"north","display_name":"Synthetic North"}'
+    python3 -m registry_bridge --db feed.db call issuer.add --json '{"issuer":"south","display_name":"Synthetic South"}'
+    python3 -m registry_bridge --db feed.db poll --source registry --url http://127.0.0.1:8765/changes --pages 4
+    python3 -m registry_bridge --db feed.db poll --source registry --pages 2 --issuer north
+    python3 -m registry_bridge --db feed.db checkpoints
+    python3 -m registry_bridge --db feed.db report
+
 原有操作参数可通过 python3 -m registry_bridge --help 查询。

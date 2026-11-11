@@ -1,7 +1,7 @@
 import json
 
 from registry_bridge.errors import InvalidMessage
-from registry_bridge.feeds import importer, receiver
+from registry_bridge.feeds import importer, poller, receiver
 from registry_bridge.feeds.message import decode_json, integer, strict_object
 from registry_bridge.ledger import audit, issuers, leases
 from registry_bridge.query import catalog, consumer, exporting
@@ -25,6 +25,9 @@ class RegistryService:
             'event.skip': self.event_skip,
             'import.feed': self.import_feed,
             'import.history': self.import_history,
+            'feed.poll': self.feed_poll,
+            'feed.checkpoint': self.feed_checkpoint,
+            'feed.checkpoints': self.feed_checkpoints,
             'deadletter.list': self.deadletter_list,
             'deadletter.replay': self.deadletter_replay,
             'asset.get': self.asset_get,
@@ -127,6 +130,18 @@ class RegistryService:
     def import_history(self, p):
         self.fields(p, (), ('limit',))
         return importer.import_history(self.store, **p)
+
+    def feed_poll(self, p):
+        self.fields(p, ('source',), ('url', 'cursor', 'pages', 'issuers', 'owner', 'ttl', 'retries'))
+        return poller.ChangePoller(self.store).poll(**p)
+
+    def feed_checkpoint(self, p):
+        self.fields(p, ('source',))
+        return poller.ChangePoller(self.store).checkpoint(**p)
+
+    def feed_checkpoints(self, p):
+        self.fields(p)
+        return poller.ChangePoller(self.store).checkpoints()
 
     def deadletter_list(self, p):
         self.fields(p, (), ('unreplayed', 'limit'))

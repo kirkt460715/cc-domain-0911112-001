@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 from registry_bridge.errors import RegistryError, InvalidMessage
 from registry_bridge.feeds import bundle, importer
 from registry_bridge.feeds.message import canonical, decode_json
+from registry_bridge.feeds.poller import ChangePoller
 from registry_bridge.ledger.storage import Store
 from registry_bridge.query import exporting
 from registry_bridge.reconcile import inspection
@@ -30,6 +32,16 @@ def parser():
     ingest.add_argument('--source', required=True)
     ingest.add_argument('--format', choices=('csv', 'ndjson'), default='ndjson')
     ingest.add_argument('--atomic', action='store_true')
+    poll = commands.add_parser('poll')
+    poll.add_argument('--source', required=True)
+    poll.add_argument('--url')
+    poll.add_argument('--cursor')
+    poll.add_argument('--pages', type=int, default=1)
+    poll.add_argument('--issuer', dest='issuers', action='append')
+    poll.add_argument('--owner')
+    poll.add_argument('--ttl', type=int, default=30)
+    checkpoints = commands.add_parser('checkpoints')
+    checkpoints.add_argument('--source')
     export = commands.add_parser('export')
     export.add_argument('path')
     export.add_argument('--format', choices=('json', 'csv'), default='json')
@@ -76,6 +88,14 @@ def dispatch(store, args):
         return service.execute_batch(read_json(args.path), atomic=not args.partial)
     if args.command == 'import':
         return importer.import_file(store, args.path, args.source, format=args.format, atomic=args.atomic)
+    if args.command == 'poll':
+        return ChangePoller(store).poll(
+            args.source, url=args.url, cursor=args.cursor, pages=args.pages,
+            issuers=args.issuers, owner=args.owner or f'poll-{os.getpid()}', ttl=args.ttl,
+        )
+    if args.command == 'checkpoints':
+        poller = ChangePoller(store)
+        return poller.checkpoint(args.source) if args.source else poller.checkpoints()
     if args.command == 'export':
         return exporting.write_snapshot(store, args.path, format=args.format, instant=args.at)
     if args.command == 'bundle':
